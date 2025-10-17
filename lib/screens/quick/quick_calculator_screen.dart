@@ -216,32 +216,31 @@ class QuickCalculatorScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    controller.saveQuickCalculation();
-                    Get.toNamed('/quick-calculator-details');
-                  },
-                  icon: const Icon(Icons.visibility),
-                  label: const Text('VIEW DETAILS'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  controller.saveQuickCalculation();
+                  Get.toNamed('/quick-calculator-details');
+                },
+                icon: const Icon(Icons.visibility),
+                label:  Text('VIEW DETAILS'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12,horizontal: 15),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => controller.saveQuickCalculation(),
-                  icon:  Icon(Icons.save, color: Colors.white),
-                  label:  Text('SAVE',style: TextStyle(color: Colors.white),),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
+              //const SizedBox(width: 12),
+              // Expanded(
+              //   child: ElevatedButton.icon(
+              //     onPressed: () => controller.saveQuickCalculation(),
+              //     icon:  Icon(Icons.save, color: Colors.white),
+              //     label:  Text('SAVE',style: TextStyle(color: Colors.white),),
+              //     style: ElevatedButton.styleFrom(
+              //       backgroundColor: Colors.blue,
+              //       padding: const EdgeInsets.symmetric(vertical: 12),
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ],
