@@ -1,4 +1,5 @@
 import 'package:emi_calculator/controllers/emi_controller.dart';
+import 'package:emi_calculator/screens/emi/emi_details_screen.dart';
 import 'package:emi_calculator/screens/emi/history_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -28,16 +29,6 @@ class EMICalculatorScreen extends StatelessWidget {
         appBar: AppBar(
           //backgroundColor: Color(0xFF009EF7),
           title: Text('EMI Calculator', style: TextStyle(fontWeight: FontWeight.bold)),
-          leading: IconButton(
-            tooltip: 'Back',
-            icon: Icon(Icons.arrow_back),
-            onPressed: () {
-              // optionally delete controller here if you want
-              // Get.delete<EMIController>();
-              // controller.resetAll();
-              Get.back();
-            },
-          ),
           actions: [
             IconButton(
               tooltip: 'History',
@@ -65,24 +56,34 @@ class EMICalculatorScreen extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          // validate form according to current selection
+                          // // validate form according to current selection
+                          // if (_formKey.currentState?.validate() ?? false) {
+                          //   controller.calculateEMI();
+                          //   controller.hasCalculated.value = true;
+                          //   if (controller.hasCalculated.value) {
+                          //     controller.saveCalculation();
+                          //   }
+                          // }
+                          // // else {
+                          // //   // show a short message
+                          // //   Get.snackbar(
+                          // //     'Invalid input',
+                          // //     'Please fill required fields correctly',
+                          // //     snackPosition: SnackPosition.BOTTOM,
+                          // //     backgroundColor: Colors.black87,
+                          // //     colorText: Colors.white,
+                          // //   );
+                          // // }
                           if (_formKey.currentState?.validate() ?? false) {
+                            if (!controller.isEMIInputSelected.value) {
+                              controller.computePeriodFromEmiOnce();
+                            }
                             controller.calculateEMI();
                             controller.hasCalculated.value = true;
                             if (controller.hasCalculated.value) {
                               controller.saveCalculation();
                             }
                           }
-                          // else {
-                          //   // show a short message
-                          //   Get.snackbar(
-                          //     'Invalid input',
-                          //     'Please fill required fields correctly',
-                          //     snackPosition: SnackPosition.BOTTOM,
-                          //     backgroundColor: Colors.black87,
-                          //     colorText: Colors.white,
-                          //   );
-                          // }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,
@@ -109,7 +110,7 @@ class EMICalculatorScreen extends StatelessWidget {
                         onPressed: () {
                           // also reset any error states in the form
                           _formKey.currentState?.reset();
-                            controller.resetAll();
+                          controller.resetAll();
                         },
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.blue, width: 1.5),
@@ -194,9 +195,11 @@ class EMICalculatorScreen extends StatelessWidget {
                   controller: controller.amountController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    SingleDotInputFormatter(),
+                    FilteringTextInputFormatter.digitsOnly,
+                    IndianNumberInputFormatter(),
                   ],
+
+                  focusNode: controller.amountFocusNode,
                   cursorColor: Colors.blue,
                   validator: amountValidator,
                   decoration: InputDecoration(
@@ -237,8 +240,10 @@ class EMICalculatorScreen extends StatelessWidget {
                   validator: interestValidator,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    SingleDotInputFormatter(),
+                    DecimalTextInputFormatter(decimalRange: 2),
                   ],
+
+                  focusNode: controller.interestFocusNode,
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -349,8 +354,10 @@ class EMICalculatorScreen extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    SingleDotInputFormatter(),
+                    DecimalTextInputFormatter(decimalRange: 2),
                   ],
+
+                  focusNode: controller.periodFocusNode,
                   enabled: controller.isEMIInputSelected.value,
                   validator: (_) => periodValidator(controller.periodController.text),
                   decoration: InputDecoration(
@@ -387,8 +394,10 @@ class EMICalculatorScreen extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    SingleDotInputFormatter(),
+                    DecimalTextInputFormatter(decimalRange: 2),
                   ],
+
+                  focusNode: controller.emiFocusNode,
                   enabled: !controller.isEMIInputSelected.value,
                   validator: (_) => emiValidator(controller.emiController.text),
                   decoration: InputDecoration(
@@ -431,8 +440,10 @@ class EMICalculatorScreen extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                    SingleDotInputFormatter(),
+                    DecimalTextInputFormatter(decimalRange: 2),
                   ],
+
+                  focusNode: controller.processingFeeFocusNode,
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -458,8 +469,6 @@ class EMICalculatorScreen extends StatelessWidget {
 
   // _buildResultCard(...) stays unchanged; use your existing method.
   Widget _buildResultCard(EMIController controller) {
-    // copy your existing implementation
-    controller.calculateEMI();
     final currencyFmt = NumberFormat.currency(symbol: '₹', decimalDigits: 2);
     double denomForTotal = controller.totalPayment.value == 0 ? 1 : controller.totalPayment.value;
     double loanPercentage = (controller.amount.value / denomForTotal) * 100;
@@ -475,7 +484,11 @@ class EMICalculatorScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Summary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Text('Summary',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
           Table(
             columnWidths: {0: FlexColumnWidth(2), 1: FlexColumnWidth(3)},
             defaultVerticalAlignment: TableCellVerticalAlignment.middle,
@@ -483,22 +496,46 @@ class EMICalculatorScreen extends StatelessWidget {
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey[50]),
                 children: [
-                  Padding(padding: EdgeInsets.all(12), child: Text('Monthly EMI', style: TextStyle(fontWeight: FontWeight.w500))),
-                  Padding(padding: EdgeInsets.all(12), child: Text(currencyFmt.format(controller.monthlyEMI.value), textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Monthly EMI',
+                          style: TextStyle(fontWeight: FontWeight.w500))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                          currencyFmt.format(controller.monthlyEMI.value),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
               ),
               TableRow(
                 decoration: BoxDecoration(color: Colors.white),
                 children: [
-                  Padding(padding: EdgeInsets.all(12), child: Text('Total Interest', style: TextStyle(fontWeight: FontWeight.w500))),
-                  Padding(padding: EdgeInsets.all(12), child: Text(currencyFmt.format(controller.totalInterest.value), textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Total Interest',
+                          style: TextStyle(fontWeight: FontWeight.w500))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                          currencyFmt.format(controller.totalInterest.value),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
               ),
               TableRow(
                 decoration: BoxDecoration(color: Colors.grey[50]),
                 children: [
-                  Padding(padding: EdgeInsets.all(12), child: Text('Total Payment', style: TextStyle(fontWeight: FontWeight.w500))),
-                  Padding(padding: EdgeInsets.all(12), child: Text(currencyFmt.format(controller.totalPayment.value), textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Total Payment',
+                          style: TextStyle(fontWeight: FontWeight.w500))),
+                  Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                          currencyFmt.format(controller.totalPayment.value),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
               ),
             ],
@@ -512,8 +549,20 @@ class EMICalculatorScreen extends StatelessWidget {
               child: PieChart(
                 PieChartData(
                   sections: [
-                    PieChartSectionData(value: loanPercentage, color: Colors.orange, radius: 60, title: '${loanPercentage.toStringAsFixed(1)}%', titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    PieChartSectionData(value: interestPercentage, color: Colors.teal, radius: 60, title: '${interestPercentage.toStringAsFixed(1)}%', titleStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    PieChartSectionData(
+                        value: loanPercentage,
+                        color: Colors.orange,
+                        radius: 60,
+                        title: '${loanPercentage.toStringAsFixed(1)}%',
+                        titleStyle: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
+                    PieChartSectionData(
+                        value: interestPercentage,
+                        color: Colors.teal,
+                        radius: 60,
+                        title: '${interestPercentage.toStringAsFixed(1)}%',
+                        titleStyle: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold)),
                   ],
                   sectionsSpace: 2,
                   centerSpaceRadius: 28,
@@ -523,18 +572,27 @@ class EMICalculatorScreen extends StatelessWidget {
           ),
 
           SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [Legend(color: Colors.orange, label: 'Loan Amount'), SizedBox(width: 12), Legend(color: Colors.teal, label: 'Total Interest')]),
+          Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Legend(color: Colors.orange, label: 'Loan Amount'),
+                SizedBox(width: 12),
+                Legend(color: Colors.teal, label: 'Total Interest')
+              ]),
           SizedBox(height: 12),
 
           OutlinedButton(
-            onPressed: () => Get.toNamed('/emi-details'),
-            style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.blue), padding: EdgeInsets.symmetric(vertical: 12)),
+            onPressed: () => Get.to(() => EMIDetailsScreen()),
+            style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.blue),
+                padding: EdgeInsets.symmetric(vertical: 12)),
             child: Text('VIEW FULL DETAILS', style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
     );
   }
+
 }
 
 class Legend extends StatelessWidget {
@@ -554,15 +612,70 @@ class Legend extends StatelessWidget {
   }
 }
 
-class SingleDotInputFormatter extends TextInputFormatter {
+/// Allows only digits + a single dot, and limits decimals after the dot.
+/// Usage: inputFormatters: [ FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')), DecimalTextInputFormatter(decimalRange: 2) ]
+class DecimalTextInputFormatter extends TextInputFormatter {
+  final int decimalRange;
+  DecimalTextInputFormatter({this.decimalRange = 2}) : assert(decimalRange >= 0);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final String newText = newValue.text;
+
+    // allow empty
+    if (newText.isEmpty) return newValue;
+
+    // only digits and dot allowed
+    if (RegExp(r'[^0-9.]').hasMatch(newText)) {
+      return oldValue;
+    }
+
+    // if starts with dot, prepend 0 (optional)
+    if (newText == '.') {
+      return TextEditingValue(
+        text: '0.',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+    }
+
+    // prevent more than one dot
+    final firstDot = newText.indexOf('.');
+    if (firstDot >= 0) {
+      if (newText.indexOf('.', firstDot + 1) != -1) {
+        return oldValue;
+      }
+      // enforce decimalRange
+      final decimals = newText.substring(firstDot + 1);
+      if (decimals.length > decimalRange) {
+        return oldValue;
+      }
+    }
+
+    // everything OK
+    return newValue;
+  }
+}
+
+/// Formats numbers with Indian comma separators (e.g., 4000000 -> 40,00,000).
+/// Assumes integer input (no decimals).
+/// Usage: inputFormatters: [FilteringTextInputFormatter.digitsOnly, IndianNumberInputFormatter()]
+class IndianNumberInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue,
-      TextEditingValue newValue,
-      ) {
-    // Allow only one dot
-    if (newValue.text.split('.').length > 2) {
-      return oldValue; // reject if more than one dot
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final newText = newValue.text;
+
+    if (newText.isNotEmpty) {
+      final numericString = newText.replaceAll(',', '');
+      final number = int.tryParse(numericString);
+      if (number != null) {
+        final formatter = NumberFormat('#,##,##,###');
+        final formatted = formatter.format(number);
+        return TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+      }
     }
     return newValue;
   }

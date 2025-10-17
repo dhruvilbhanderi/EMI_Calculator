@@ -36,8 +36,17 @@ class EMIController extends GetxController {
   late final TextEditingController emiController;
   late final TextEditingController processingFeeController;
 
+  // Focus nodes to track if user is editing a field
+  late final FocusNode amountFocusNode;
+  late final FocusNode interestFocusNode;
+  late final FocusNode periodFocusNode;
+  late final FocusNode emiFocusNode;
+  late final FocusNode processingFeeFocusNode;
+
   // Internal guard to avoid update loops
   bool _internalUpdate = false;
+
+  // inside EMIController
 
   @override
   void onInit() {
@@ -50,6 +59,13 @@ class EMIController extends GetxController {
     emiController = TextEditingController();
     processingFeeController = TextEditingController();
 
+    amountFocusNode = FocusNode();
+    interestFocusNode = FocusNode();
+    periodFocusNode = FocusNode();
+    emiFocusNode = FocusNode();
+    processingFeeFocusNode = FocusNode();
+
+
     // listeners: when user types, update observables
     amountController.addListener(() {
       if (_internalUpdate) return;
@@ -57,17 +73,17 @@ class EMIController extends GetxController {
       if (parsed != null) {
         amount.value = parsed;
       }
-      // if parsed is null (empty/invalid), keep previous value => do nothing
+      // no automatic calculate here
     });
 
     interestController.addListener(() {
       if (_internalUpdate) return;
       final parsed = double.tryParse(interestController.text);
       if (parsed != null) {
-        // keep interest within reasonable bounds to avoid slider assertion
         final bounded = parsed.clamp(0.0, 100.0);
         interestRate.value = bounded;
       }
+      // no automatic calculate here
     });
 
     periodController.addListener(() {
@@ -76,22 +92,21 @@ class EMIController extends GetxController {
       if (parsed != null && parsed > 0) {
         periodYears.value = parsed.round();
       }
+      // no automatic calculate here
     });
-
-
 
     emiController.addListener(() {
       if (_internalUpdate) return;
+
       final parsed = double.tryParse(emiController.text);
       if (parsed != null && parsed > 0) {
         monthlyEMI.value = parsed;
-
-        // if EMI field is the active input, compute period automatically
-        if (!isEMIInputSelected.value) {
-          _computePeriodFromEmi();
-        }
+      } else if (emiController.text.isEmpty) {
+        monthlyEMI.value = 0.0;
       }
     });
+
+
 
     processingFeeController.addListener(() {
       if (_internalUpdate) return;
@@ -112,35 +127,70 @@ class EMIController extends GetxController {
     loadCalculations();
   }
 
+// Update text controllers but do NOT overwrite while the user is editing
   void _updateTextControllers() {
     _internalUpdate = true;
 
     String formatNumber(double value) {
       if (value == 0) return '';
       if (value % 1 == 0) {
-        // integer (no decimal part)
         return value.toInt().toString();
       } else {
-        // decimal (keep only necessary digits)
         return value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
       }
     }
 
-    amountController.text = formatNumber(amount.value);
-    interestController.text = formatNumber(interestRate.value);
-    periodController.text = formatNumber(periodYears.value.toDouble());
-    emiController.text = formatNumber(monthlyEMI.value);
-    processingFeeController.text = formatNumber(processingFee.value);
+    if (!amountFocusNode.hasFocus) {
+      amountController.text = formatNumber(amount.value);
+      amountController.selection = TextSelection.fromPosition(TextPosition(offset: amountController.text.length));
+    }
 
-    // move caret to end
-    amountController.selection = TextSelection.fromPosition(TextPosition(offset: amountController.text.length));
-    interestController.selection = TextSelection.fromPosition(TextPosition(offset: interestController.text.length));
-    periodController.selection = TextSelection.fromPosition(TextPosition(offset: periodController.text.length));
-    emiController.selection = TextSelection.fromPosition(TextPosition(offset: emiController.text.length));
-    processingFeeController.selection = TextSelection.fromPosition(TextPosition(offset: processingFeeController.text.length));
+    if (!interestFocusNode.hasFocus) {
+      interestController.text = formatNumber(interestRate.value);
+      interestController.selection = TextSelection.fromPosition(TextPosition(offset: interestController.text.length));
+    }
+
+    if (!periodFocusNode.hasFocus) {
+      periodController.text = formatNumber(periodYears.value.toDouble());
+      periodController.selection = TextSelection.fromPosition(TextPosition(offset: periodController.text.length));
+    }
+
+    if (!emiFocusNode.hasFocus) {
+      emiController.text = formatNumber(monthlyEMI.value);
+      emiController.selection = TextSelection.fromPosition(TextPosition(offset: emiController.text.length));
+    }
+
+    if (!processingFeeFocusNode.hasFocus) {
+      processingFeeController.text = formatNumber(processingFee.value);
+      processingFeeController.selection = TextSelection.fromPosition(TextPosition(offset: processingFeeController.text.length));
+    }
 
     _internalUpdate = false;
   }
+
+
+  /// Call this when you want to compute the period from the current EMI text.
+  /// This method computes & sets periodYears but DOES NOT call calculateEMI itself.
+  /// We'll call this from the Calculate button before running calculateEMI().
+  void computePeriodFromEmiOnce() {
+    double p = amount.value;
+    double r = interestRate.value / 12 / 100;
+    double emi = monthlyEMI.value;
+
+    if (p <= 0 || r <= 0 || emi <= 0) return;
+
+    double denom = (emi - p * r);
+    if (denom <= 0) return;
+
+    double nRaw = (log(emi / denom) / log(1 + r));
+    if (nRaw.isNaN || nRaw.isInfinite) return;
+
+    double years = nRaw / 12;
+    // update periodYears (rounded)
+    periodYears.value = years.round();
+    // DO NOT call calculateEMI() here — caller will do calculateEMI() after this.
+  }
+
 
 
 
@@ -166,10 +216,29 @@ class EMIController extends GetxController {
     currentCalculation.value = null;
   }
 
-  calculateEMI() {
+  void calculateEMI() {
     double p = amount.value;
     double r = interestRate.value / 12 / 100;
-    int n = (periodYears.value * 12).round(); // years → months
+    int n = (periodYears.value * 12).round();
+
+    if (!isEMIInputSelected.value) {
+      double emi = monthlyEMI.value;
+
+      if (emi <= 0 || p <= 0 || r <= 0 || n <= 0) {
+        totalInterest.value = 0.0;
+        totalPayment.value = 0.0;
+        return;
+      }
+
+      monthlyEMI.value = emi;
+
+      double total = emi * n;
+
+      totalPayment.value = total + (p * processingFee.value / 100);
+      totalInterest.value = total - p;
+
+      return;
+    }
 
     if (p <= 0 || r <= 0 || n <= 0) {
       monthlyEMI.value = 0.0;
@@ -179,8 +248,10 @@ class EMIController extends GetxController {
     }
 
     double emi = (p * r * pow(1 + r, n)) / (pow(1 + r, n) - 1);
+
     if (emi.isNaN || emi.isInfinite) emi = 0.0;
-    monthlyEMI.value = emi;
+
+    monthlyEMI.value = emi.roundToDouble();
 
     double total = emi * n;
     totalPayment.value = total + (p * processingFee.value / 100);
@@ -189,7 +260,8 @@ class EMIController extends GetxController {
 
 
 
-  // When user enters EMI (and EMI input is active), compute n (period months)
+
+
   void _computePeriodFromEmi() {
     double p = amount.value;
     double r = interestRate.value / 12 / 100;
@@ -293,6 +365,12 @@ class EMIController extends GetxController {
     periodController.dispose();
     emiController.dispose();
     processingFeeController.dispose();
+    amountFocusNode.dispose();
+    interestFocusNode.dispose();
+    periodFocusNode.dispose();
+    emiFocusNode.dispose();
+    processingFeeFocusNode.dispose();
+
     super.onClose();
   }
 }

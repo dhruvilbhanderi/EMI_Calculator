@@ -73,7 +73,7 @@ class HistoryScreen extends StatelessWidget {
                     controller.amount.value = calc.amount;
                     controller.interestRate.value = calc.interestRate;
                     controller.periodYears.value = (calc.periodMonths / 12).round();
-                    await controller.calculateEMI();
+                    controller.calculateEMI();
                     //Get.toNamed('/emidetails');
                     Get.to(EMIDetailsScreen());
 
